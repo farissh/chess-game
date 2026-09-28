@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess } from "chess.js";
-import { useStockfish } from "@/hooks/useStockfish";
+import { useStockfish, type EngineInfo } from "@/hooks/useStockfish";
 
 export type Difficulty = "beginner" | "easy" | "medium" | "hard";
 
@@ -47,6 +47,29 @@ function cloneGame(game: Chess) {
 }
 
 export type PlayerColor = "w" | "b"
+
+function scoreFromWhitePerspective(
+  score: number,
+  fen: string
+) {
+  const sideToMove = fen.split(" ")[1];
+
+  return sideToMove === "w"
+    ? score
+    : -score;
+}
+
+function scoreFromPlayerPerspective(
+  score: number,
+  fen: string,
+  playerColor: PlayerColor
+) {
+  const whiteScore = scoreFromWhitePerspective(score, fen);
+
+  return playerColor === "w"
+    ? whiteScore
+    : -whiteScore;
+}
 
 export function useChessGame() {
   const [game, setGame] = useState(() => new Chess());
@@ -108,6 +131,39 @@ export function useChessGame() {
     engineInfo,
   } = opponentEngine;
 
+  type CoachPhase = "idle" | "before" | "after";
+
+  const [coachPhase, setCoachPhase] = useState<CoachPhase>("idle");
+
+  const [currentPositionAnalysis, setCurrentPositionAnalysis] =
+    useState<EngineInfo | null>(null);
+
+  const [currentPositionFen, setCurrentPositionFen] =
+    useState<string | null>(null);
+
+  const [lastMoveBeforeAnalysis, setLastMoveBeforeAnalysis] =
+    useState<EngineInfo | null>(null);
+
+  const [lastMoveAfterAnalysis, setLastMoveAfterAnalysis] =
+    useState<EngineInfo | null>(null);
+
+  const coachRequestedFenRef = useRef<string | null>(null);
+
+  type UserMove = {
+    from: string;
+    to: string;
+    uci: string;
+  };
+
+  const [lastUserMove, setLastUserMove] =
+    useState<UserMove | null>(null);
+
+  const [lastMoveBeforeFen, setLastMoveBeforeFen] =
+    useState<string | null>(null);
+
+  const [lastMoveAfterFen, setLastMoveAfterFen] =
+    useState<string | null>(null);
+
   const {
     engineReady: coachEngineReady,
     engineInfo: coachAnalysis,
@@ -115,15 +171,65 @@ export function useChessGame() {
     stopThinking: stopCoachAnalysis,
   } = coachEngine;
 
+  const resetCoachState = useCallback(() => {
+    setCoachPhase("idle");
+    setCurrentPositionAnalysis(null);
+    setCurrentPositionFen(null);
+    setLastMoveBeforeAnalysis(null);
+    setLastMoveAfterAnalysis(null);
+    coachRequestedFenRef.current = null;
+  }, []);
+
   useEffect(() => {
-    if (!coachEngineReady) {
+    if (!coachAnalysis) {
       return;
     }
 
-    requestCoachAnalysis(game.fen(), {
+    if (coachPhase === "before") {
+      setCurrentPositionAnalysis(coachAnalysis);
+      setCurrentPositionFen(coachRequestedFenRef.current);
+      setCoachPhase("idle");
+      return;
+    }
+
+    if (coachPhase === "after") {
+      setLastMoveAfterAnalysis(coachAnalysis);
+      setCoachPhase("idle");
+    }
+  }, [coachAnalysis, coachPhase]);
+
+  useEffect(() => {
+    if (
+      !coachEngineReady ||
+      resigned ||
+      game.isGameOver() ||
+      game.turn() !== playerColor ||
+      coachPhase !== "idle"
+    ) {
+      return;
+    }
+
+    const fen = game.fen();
+
+    if (currentPositionFen === fen) {
+      return;
+    }
+
+    coachRequestedFenRef.current = fen;
+    setCoachPhase("before");
+
+    requestCoachAnalysis(fen, {
       depth: COACH_ANALYSIS_DEPTH,
     });
-  }, [coachEngineReady, game, requestCoachAnalysis]);
+  }, [
+    coachEngineReady,
+    coachPhase,
+    currentPositionFen,
+    game,
+    playerColor,
+    requestCoachAnalysis,
+    resigned,
+  ]);
 
   const newGame = useCallback(() => {
     const newGameInstance = new Chess();
@@ -131,6 +237,7 @@ export function useChessGame() {
     setGame(newGameInstance);
     resetEngineThinking();
     stopCoachAnalysis();
+    resetCoachState();
     setResigned(false);
 
     if (playerColor === "b" && engineReady) {
@@ -167,6 +274,16 @@ export function useChessGame() {
         return false;
       }
 
+      const currentFen = game.fen();
+
+      if (
+        !currentPositionAnalysis ||
+        currentPositionFen !== currentFen ||
+        coachPhase !== "idle"
+      ) {
+        return false;
+      }
+
       const gameCopy = cloneGame(game);
 
       try {
@@ -180,24 +297,54 @@ export function useChessGame() {
           return false;
         }
 
-        setGame(gameCopy);
+      const userMove = {
+        from: sourceSquare,
+        to: targetSquare,
+        uci: `${sourceSquare}${targetSquare}`,
+      };
 
-        if (!gameCopy.isGameOver()) {
-          askEngineMove(gameCopy.fen());
-        }
+      setLastUserMove(userMove);
+      setLastMoveBeforeFen(currentFen);
 
-        return true;
+      setLastMoveBeforeAnalysis(currentPositionAnalysis);
+      setLastMoveAfterAnalysis(null);
+
+      setCurrentPositionAnalysis(null);
+      setCurrentPositionFen(null);
+
+      setGame(gameCopy);
+
+      const afterFen = gameCopy.fen();
+
+      setLastMoveAfterFen(afterFen);
+
+      coachRequestedFenRef.current = afterFen;
+      setCoachPhase("after");
+
+      requestCoachAnalysis(afterFen, {
+        depth: COACH_ANALYSIS_DEPTH,
+      });
+
+      if (!gameCopy.isGameOver()) {
+        askEngineMove(gameCopy.fen());
+      }
+
+      return true;
       } catch {
         return false;
       }
     },
     [
       askEngineMove,
+      coachPhase,
+      currentPositionAnalysis,
+      currentPositionFen,
       engineReady,
       engineThinking,
       game,
-      resigned,
       playerColor,
+      requestCoachAnalysis,
+      resigned,
     ]
   );
 
@@ -216,6 +363,7 @@ export function useChessGame() {
   const resignGame = useCallback(() => {
     stopThinking();
     stopCoachAnalysis();
+    resetCoachState();
     setResigned(true);
   }, [stopThinking, stopCoachAnalysis]);
 
@@ -229,6 +377,7 @@ export function useChessGame() {
       setResigned(false);
       resetEngineThinking();
       stopCoachAnalysis();
+      resetCoachState();
 
       if (color === "b" && engineReady) {
         requestBestMove(newGameInstance.fen(), {
@@ -284,6 +433,7 @@ export function useChessGame() {
 
     stopThinking();
     stopCoachAnalysis();
+    resetCoachState();
 
     setGame((currentGame) => {
       const gameCopy = cloneGame(currentGame);
@@ -307,6 +457,44 @@ export function useChessGame() {
     setResigned(false);
   }, [engineThinking, stopThinking, stopCoachAnalysis]);
 
+  const centipawnLoss = useMemo(() => {
+    if (
+      !lastMoveBeforeAnalysis ||
+      !lastMoveAfterAnalysis ||
+      !lastMoveBeforeFen ||
+      !lastMoveAfterFen
+    ) {
+      return null;
+    }
+
+    if (
+      lastMoveBeforeAnalysis.scoreType !== "cp" ||
+      lastMoveAfterAnalysis.scoreType !== "cp"
+    ) {
+      return null;
+    }
+
+    const beforeScore = scoreFromPlayerPerspective(
+      lastMoveBeforeAnalysis.score,
+      lastMoveBeforeFen,
+      playerColor
+    );
+
+    const afterScore = scoreFromPlayerPerspective(
+      lastMoveAfterAnalysis.score,
+      lastMoveAfterFen,
+      playerColor
+    );
+
+    return Math.max(0, beforeScore - afterScore);
+  }, [
+    lastMoveBeforeAnalysis,
+    lastMoveAfterAnalysis,
+    lastMoveBeforeFen,
+    lastMoveAfterFen,
+    playerColor,
+  ]);
+
   return {
     changeDifficulty,
     difficulties,
@@ -326,5 +514,12 @@ export function useChessGame() {
     undoMove,
     opponentAnalysis: engineInfo,
     coachAnalysis,
+    coachPhase,
+    lastMoveBeforeAnalysis,
+    lastMoveAfterAnalysis,
+    lastUserMove,
+    lastMoveBeforeFen,
+    lastMoveAfterFen,
+    centipawnLoss,
   };
 }

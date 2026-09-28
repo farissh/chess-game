@@ -24,6 +24,11 @@ export function ChessGame() {
     changePlayerColor,
     undoMove,
     opponentAnalysis,
+    lastMoveBeforeAnalysis,
+    lastMoveAfterAnalysis,
+    coachPhase,
+    lastUserMove,
+    centipawnLoss,
   } = useChessGame();
 
   return (
@@ -110,10 +115,33 @@ export function ChessGame() {
         Undo
       </button>
 
-      {opponentAnalysis && (
+      <p className="text-sm">Coach phase: {coachPhase}</p>
+
+      {lastMoveBeforeAnalysis && (
         <pre className="text-xs max-w-[500px] overflow-auto">
-          {JSON.stringify(opponentAnalysis, null, 2)}
+          BEFORE
+          {JSON.stringify(lastMoveBeforeAnalysis, null, 2)}
         </pre>
+      )}
+
+      {lastMoveAfterAnalysis && (
+        <pre className="text-xs max-w-[500px] overflow-auto">
+          AFTER
+          {JSON.stringify(lastMoveAfterAnalysis, null, 2)}
+        </pre>
+      )}
+
+      {lastUserMove && (
+        <pre className="text-xs max-w-[500px] overflow-auto">
+          MOVE
+          {JSON.stringify(lastUserMove, null, 2)}
+        </pre>
+      )}
+
+      {centipawnLoss !== null && (
+        <p className="text-sm">
+          Centipawn loss: {centipawnLoss}
+        </p>
       )}
 
       <div className="text-sm opacity-60 max-w-[500px] break-all">
