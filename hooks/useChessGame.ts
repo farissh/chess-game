@@ -71,6 +71,33 @@ function scoreFromPlayerPerspective(
     : -whiteScore;
 }
 
+export type MoveQuality =
+  | "Best"
+  | "Good"
+  | "Inaccuracy"
+  | "Mistake"
+  | "Blunder";
+
+function classifyMove(centipawnLoss: number): MoveQuality {
+  if (centipawnLoss <= 20) {
+    return "Best";
+  }
+
+  if (centipawnLoss <= 50) {
+    return "Good";
+  }
+
+  if (centipawnLoss <= 100) {
+    return "Inaccuracy";
+  }
+
+  if (centipawnLoss <= 200) {
+    return "Mistake";
+  }
+
+  return "Blunder";
+}
+
 export function useChessGame() {
   const [game, setGame] = useState(() => new Chess());
   const [resigned, setResigned] = useState(false);
@@ -495,6 +522,14 @@ export function useChessGame() {
     playerColor,
   ]);
 
+  const moveQuality = useMemo(() => {
+    if (centipawnLoss === null) {
+      return null;
+    }
+
+    return classifyMove(centipawnLoss);
+  }, [centipawnLoss]);
+
   return {
     changeDifficulty,
     difficulties,
@@ -521,5 +556,7 @@ export function useChessGame() {
     lastMoveBeforeFen,
     lastMoveAfterFen,
     centipawnLoss,
+    currentPositionAnalysis,
+    moveQuality,
   };
 }

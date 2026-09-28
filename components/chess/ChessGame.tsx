@@ -29,6 +29,8 @@ export function ChessGame() {
     coachPhase,
     lastUserMove,
     centipawnLoss,
+    currentPositionAnalysis,
+    moveQuality,
   } = useChessGame();
 
   return (
@@ -117,30 +119,33 @@ export function ChessGame() {
 
       <p className="text-sm">Coach phase: {coachPhase}</p>
 
-      {lastMoveBeforeAnalysis && (
-        <pre className="text-xs max-w-[500px] overflow-auto">
-          BEFORE
-          {JSON.stringify(lastMoveBeforeAnalysis, null, 2)}
-        </pre>
-      )}
-
-      {lastMoveAfterAnalysis && (
-        <pre className="text-xs max-w-[500px] overflow-auto">
-          AFTER
-          {JSON.stringify(lastMoveAfterAnalysis, null, 2)}
-        </pre>
-      )}
-
-      {lastUserMove && (
-        <pre className="text-xs max-w-[500px] overflow-auto">
-          MOVE
-          {JSON.stringify(lastUserMove, null, 2)}
-        </pre>
-      )}
-
       {centipawnLoss !== null && (
+        <div className="text-sm">
+          <p>Centipawn loss: {centipawnLoss}</p>
+
+          {lastMoveBeforeAnalysis && (
+            <p>
+              Best move before: {lastMoveBeforeAnalysis.bestMove}
+            </p>
+          )}
+
+          {lastUserMove && (
+            <p>
+              Your move: {lastUserMove.uci}
+            </p>
+          )}
+        </div>
+      )}
+
+      {moveQuality && (
+        <p className="font-semibold">
+          Move quality: {moveQuality}
+        </p>
+      )}
+
+      {currentPositionAnalysis?.bestMove && (
         <p className="text-sm">
-          Centipawn loss: {centipawnLoss}
+          Best move now: {currentPositionAnalysis.bestMove}
         </p>
       )}
 
