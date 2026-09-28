@@ -1,5 +1,5 @@
-import { PuzzleGame } from "@/components/chess/PuzzleGame";
+import { ChessGame } from "@/components/chess/ChessGame";
 
 export default function Home() {
-  return <PuzzleGame />;
+  return <ChessGame />;
 }

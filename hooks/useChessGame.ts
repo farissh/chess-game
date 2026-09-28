@@ -90,6 +90,7 @@ export function useChessGame() {
     requestBestMove,
     resetEngineThinking,
     stopThinking,
+    engineInfo,
   } = useStockfish(
     {
       limitStrength: true,
@@ -101,10 +102,24 @@ export function useChessGame() {
   );
 
   const newGame = useCallback(() => {
-    setGame(new Chess());
+    const newGameInstance = new Chess();
+
+    setGame(newGameInstance);
     resetEngineThinking();
     setResigned(false);
-  }, [resetEngineThinking]);
+
+    if (playerColor === "b" && engineReady) {
+      requestBestMove(newGameInstance.fen(), {
+        moveTime: difficulties[difficulty].moveTime,
+      });
+    }
+  }, [
+    difficulty,
+    engineReady,
+    playerColor,
+    requestBestMove,
+    resetEngineThinking,
+  ]);
 
   const askEngineMove = useCallback(
     (fen: string) => {
@@ -156,6 +171,7 @@ export function useChessGame() {
       engineThinking,
       game,
       resigned,
+      playerColor,
     ]
   );
 
@@ -232,7 +248,7 @@ export function useChessGame() {
     }
 
     return "Your move";
-  }, [engineReady, engineThinking, game, resigned]);
+  }, [engineReady, engineThinking, game, resigned, playerColor,]);
 
   const undoMove = useCallback(() => {
     const wasEngineThinking = engineThinking;
@@ -278,5 +294,6 @@ export function useChessGame() {
     playerColor,
     changePlayerColor,
     undoMove,
+    engineInfo,
   };
 }

@@ -39,14 +39,68 @@ function sendConfiguration(engine: Worker, config: StockfishConfig) {
   }
 }
 
+export type EngineScoreType = "cp" | "mate";
+
+export type EngineInfo = {
+  depth: number;
+  scoreType: EngineScoreType;
+  score: number;
+  pv: string[];
+  bestMove: string | null;
+};
+
+export function parseInfoMessage(message: string): EngineInfo | null {
+  if (!message.startsWith("info ")) {
+    return null;
+  }
+
+  const parts = message.trim().split(/\s+/);
+
+  const depthIndex = parts.indexOf("depth");
+  const scoreIndex = parts.indexOf("score");
+  const pvIndex = parts.indexOf("pv");
+
+  if (depthIndex === -1 || scoreIndex === -1) {
+    return null;
+  }
+
+  const depth = Number(parts[depthIndex + 1]);
+
+  const scoreType = parts[scoreIndex + 1] as EngineScoreType;
+  const score = Number(parts[scoreIndex + 2]);
+
+  if (
+    Number.isNaN(depth) ||
+    Number.isNaN(score) ||
+    !["cp", "mate"].includes(scoreType)
+  ) {
+    return null;
+  }
+
+  const pv =
+    pvIndex !== -1
+      ? parts.slice(pvIndex + 1)
+      : [];
+
+  return {
+    depth,
+    scoreType,
+    score,
+    pv,
+    bestMove: pv[0] ?? null,
+  };
+}
+
 export function useStockfish(
   initialConfig: StockfishConfig = {},
   options: UseStockfishOptions = {}
 ) {
   const stockfishRef = useRef<Worker | null>(null);
+  const latestInfoRef = useRef<EngineInfo | null>(null);
   const configRef = useRef<StockfishConfig>(initialConfig);
   const onBestMoveRef = useRef(options.onBestMove);
   const bestMoveIdRef = useRef(0);
+  const [engineInfo, setEngineInfo] = useState<EngineInfo | null>(null);
 
   const [engineReady, setEngineReady] = useState(false);
   const [engineThinking, setEngineThinking] = useState(false);
@@ -83,6 +137,9 @@ export function useStockfish(
       }
 
       setBestMove(null);
+      setEngineInfo(null);
+      latestInfoRef.current = null;
+
       setEngineThinking(true);
 
       engine.postMessage(`position fen ${fen}`);
@@ -132,6 +189,16 @@ export function useStockfish(
         return;
       }
 
+      if (message.startsWith("info ")) {
+        const info = parseInfoMessage(message);
+
+        if (info) {
+          latestInfoRef.current = info;
+        }
+
+        return;
+      }
+
       if (message.startsWith("bestmove")) {
         const [, move] = message.split(" ");
 
@@ -139,14 +206,26 @@ export function useStockfish(
 
         if (!move || move === "(none)") {
           setBestMove(null);
+          setEngineInfo(null);
           return;
         }
 
+        const latestInfo = latestInfoRef.current;
+
+        if (latestInfo) {
+          setEngineInfo({
+            ...latestInfo,
+            bestMove: move,
+          });
+        }
+
         bestMoveIdRef.current += 1;
+
         setBestMove({
           id: bestMoveIdRef.current,
           move,
         });
+
         onBestMoveRef.current?.(move);
       }
     };
@@ -161,6 +240,7 @@ export function useStockfish(
 
   return {
     bestMove,
+    engineInfo,
     configureEngine,
     engineReady,
     engineThinking,
