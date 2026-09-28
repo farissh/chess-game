@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Chess } from "chess.js";
 import { useStockfish } from "@/hooks/useStockfish";
 
@@ -36,6 +36,7 @@ export const difficulties: Record<Difficulty, DifficultyConfig> = {
 };
 
 const DEFAULT_DIFFICULTY: Difficulty = "easy";
+const COACH_ANALYSIS_DEPTH = 18;
 
 function cloneGame(game: Chess) {
   const clonedGame = new Chess();
@@ -83,15 +84,7 @@ export function useChessGame() {
     [resigned]
   );
 
-  const {
-    configureEngine,
-    engineReady,
-    engineThinking,
-    requestBestMove,
-    resetEngineThinking,
-    stopThinking,
-    engineInfo,
-  } = useStockfish(
+  const opponentEngine = useStockfish(
     {
       limitStrength: true,
       elo: difficulties[DEFAULT_DIFFICULTY].elo,
@@ -101,11 +94,43 @@ export function useChessGame() {
     }
   );
 
+  const coachEngine = useStockfish({
+    limitStrength: false,
+  });
+
+  const {
+    configureEngine,
+    engineReady,
+    engineThinking,
+    requestBestMove,
+    resetEngineThinking,
+    stopThinking,
+    engineInfo,
+  } = opponentEngine;
+
+  const {
+    engineReady: coachEngineReady,
+    engineInfo: coachAnalysis,
+    requestBestMove: requestCoachAnalysis,
+    stopThinking: stopCoachAnalysis,
+  } = coachEngine;
+
+  useEffect(() => {
+    if (!coachEngineReady) {
+      return;
+    }
+
+    requestCoachAnalysis(game.fen(), {
+      depth: COACH_ANALYSIS_DEPTH,
+    });
+  }, [coachEngineReady, game, requestCoachAnalysis]);
+
   const newGame = useCallback(() => {
     const newGameInstance = new Chess();
 
     setGame(newGameInstance);
     resetEngineThinking();
+    stopCoachAnalysis();
     setResigned(false);
 
     if (playerColor === "b" && engineReady) {
@@ -119,6 +144,7 @@ export function useChessGame() {
     playerColor,
     requestBestMove,
     resetEngineThinking,
+    stopCoachAnalysis,
   ]);
 
   const askEngineMove = useCallback(
@@ -189,8 +215,9 @@ export function useChessGame() {
 
   const resignGame = useCallback(() => {
     stopThinking();
+    stopCoachAnalysis();
     setResigned(true);
-  }, [stopThinking]);
+  }, [stopThinking, stopCoachAnalysis]);
 
   const changePlayerColor = useCallback(
     (color: PlayerColor) => {
@@ -201,6 +228,7 @@ export function useChessGame() {
       setGame(newGameInstance);
       setResigned(false);
       resetEngineThinking();
+      stopCoachAnalysis();
 
       if (color === "b" && engineReady) {
         requestBestMove(newGameInstance.fen(), {
@@ -213,6 +241,7 @@ export function useChessGame() {
       engineReady,
       requestBestMove,
       resetEngineThinking,
+      stopCoachAnalysis,
     ]
   );
 
@@ -254,6 +283,7 @@ export function useChessGame() {
     const wasEngineThinking = engineThinking;
 
     stopThinking();
+    stopCoachAnalysis();
 
     setGame((currentGame) => {
       const gameCopy = cloneGame(currentGame);
@@ -275,7 +305,7 @@ export function useChessGame() {
     });
 
     setResigned(false);
-  }, [engineThinking, stopThinking]);
+  }, [engineThinking, stopThinking, stopCoachAnalysis]);
 
   return {
     changeDifficulty,
@@ -294,6 +324,7 @@ export function useChessGame() {
     playerColor,
     changePlayerColor,
     undoMove,
-    engineInfo,
+    opponentAnalysis: engineInfo,
+    coachAnalysis,
   };
 }

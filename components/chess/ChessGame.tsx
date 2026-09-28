@@ -23,7 +23,7 @@ export function ChessGame() {
     playerColor,
     changePlayerColor,
     undoMove,
-    engineInfo,
+    opponentAnalysis,
   } = useChessGame();
 
   return (
@@ -110,9 +110,9 @@ export function ChessGame() {
         Undo
       </button>
 
-      {engineInfo && (
+      {opponentAnalysis && (
         <pre className="text-xs max-w-[500px] overflow-auto">
-          {JSON.stringify(engineInfo, null, 2)}
+          {JSON.stringify(opponentAnalysis, null, 2)}
         </pre>
       )}
 
