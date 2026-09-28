@@ -6,6 +6,7 @@ import { GameControls } from "@/components/chess/GameControls";
 import { GameStatus } from "@/components/chess/GameStatus";
 import { MoveHistory } from "@/components/chess/MoveHistory";
 import { useChessGame } from "@/hooks/useChessGame";
+import { MoveFeedback } from "@/components/chess/MoveFeedback";
 
 export function ChessGame() {
   const {
@@ -31,6 +32,7 @@ export function ChessGame() {
     centipawnLoss,
     currentPositionAnalysis,
     moveQuality,
+    lastMoveBeforeFen,
   } = useChessGame();
 
   return (
@@ -100,6 +102,16 @@ export function ChessGame() {
 
       <MoveHistory moves={moveHistory} />
 
+      <MoveFeedback
+        moveQuality={moveQuality}
+        centipawnLoss={centipawnLoss}
+        bestMoveBefore={lastMoveBeforeAnalysis?.bestMove ?? null}
+        userMove={lastUserMove?.uci ?? null}
+        bestMoveNow={currentPositionAnalysis?.bestMove ?? null}
+        beforeFen={lastMoveBeforeFen}
+        currentFen={game.fen()}
+      />
+
       <GameControls
         control="newGame"
         isFinished={isFinished}
@@ -118,36 +130,6 @@ export function ChessGame() {
       </button>
 
       <p className="text-sm">Coach phase: {coachPhase}</p>
-
-      {centipawnLoss !== null && (
-        <div className="text-sm">
-          <p>Centipawn loss: {centipawnLoss}</p>
-
-          {lastMoveBeforeAnalysis && (
-            <p>
-              Best move before: {lastMoveBeforeAnalysis.bestMove}
-            </p>
-          )}
-
-          {lastUserMove && (
-            <p>
-              Your move: {lastUserMove.uci}
-            </p>
-          )}
-        </div>
-      )}
-
-      {moveQuality && (
-        <p className="font-semibold">
-          Move quality: {moveQuality}
-        </p>
-      )}
-
-      {currentPositionAnalysis?.bestMove && (
-        <p className="text-sm">
-          Best move now: {currentPositionAnalysis.bestMove}
-        </p>
-      )}
 
       <div className="text-sm opacity-60 max-w-[500px] break-all">
         <p>{game.fen()}</p>
